@@ -8,18 +8,17 @@ let bot2Client = null;
 let bot1Status = { name: 'Bot 1 (Nick-2mc)', status: '初始化中...', server: 'nick-2mc.aternos.me:50109' };
 let bot2Status = { name: 'Bot 2 (Nick-1mc)', status: '初始化中...', server: 'Nick-1mc.aternos.me:17440' };
 
-// 儲存每個機器人的定時任務計時器
 let bot1IntervalTimer = null;
 let bot2IntervalTimer = null;
 
-// 發送聊天訊息或指令的函式
+// 更安全穩定的聊天訊息發送函式
 function sendChat(client, msg) {
   if (!client) return;
   try {
-    client.queue('text', {
+    client.write('text', {
       type: 'chat',
       needs_translation: false,
-      source_name: client.username || '',
+      source_name: client.username,
       xuid: '',
       platform_chat_id: '',
       message: msg
@@ -33,12 +32,12 @@ function sendChat(client, msg) {
 function sendJump(client) {
   if (!client) return;
   try {
-    client.queue('player_auth_input', {
+    client.write('player_auth_input', {
       pitch: 0, yaw: 0,
       position: { x: 0, y: 0, z: 0 },
       move_vector: { x: 0, z: 0 },
       head_yaw: 0,
-      input_data: 0x00000002, // 跳躍旗標
+      input_data: 0x00000002,
       input_mode: 1, play_mode: 0, interaction_model: 0,
       tick: 0, delta: { x: 0, y: 0, z: 0 }
     });
@@ -73,7 +72,6 @@ const server = http.createServer((req, res) => {
     } else if (action === 'jump' && targetClient) {
       sendJump(targetClient);
     } else if (action === 'set_interval') {
-      // 設定定時執行指令
       if (botId === '1') {
         if (bot1IntervalTimer) clearInterval(bot1IntervalTimer);
         if (intervalSec > 0 && msg) {
@@ -211,7 +209,7 @@ const server = http.createServer((req, res) => {
 
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
-  console.log(`[HTTP] 自動化控制面板已在 Port ${PORT} 啟動`);
+  console.log(`[HTTP] 控制面板已在 Port ${PORT} 啟動`);
 });
 
 // 2. 啟動第一個機器人
@@ -235,13 +233,13 @@ function createBot1() {
     }
   });
 
-  bot1Client.on('kick', (reason) => { bot1Status.status = '🔴 被踢出'; });
+  bot1Client.on('kick', (reason) => { bot1Status.status = `🔴 被踢出: ${JSON.stringify(reason)}`; });
   bot1Client.on('close', () => {
     bot1Status.status = '🟡 斷線中，2秒後重試...';
     setTimeout(createBot1, 2000);
   });
   bot1Client.on('error', (err) => {
-    bot1Status.status = '❌ 錯誤發生';
+    bot1Status.status = `❌ 錯誤: ${err.message}`;
     setTimeout(createBot1, 2000);
   });
 }
@@ -267,13 +265,13 @@ function createBot2() {
     }
   });
 
-  bot2Client.on('kick', (reason) => { bot2Status.status = '🔴 被踢出'; });
-  bot2Client.on('close', () => {
+  bot2Status.on('kick', (reason) => { bot2Status.status = `🔴 被踢出: ${JSON.stringify(reason)}`; });
+  bot2Status.on('close', () => {
     bot2Status.status = '🟡 斷線中，2秒後重試...';
     setTimeout(createBot2, 2000);
   });
-  bot2Client.on('error', (err) => {
-    bot2Status.status = '❌ 錯誤發生';
+  bot2Status.on('error', (err) => {
+    bot2Status.status = `❌ 錯誤: ${err.message}`;
     setTimeout(createBot2, 2000);
   });
 }
