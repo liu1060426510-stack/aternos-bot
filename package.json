@@ -1,0 +1,15 @@
+{
+  "name": "aternos-bedrock-bot",
+  "version": "1.0.0",
+  "description": "Aternos Bedrock AFK Bot",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js"
+  },
+  "dependencies": {
+    "bedrock-protocol": "^1.40.0"
+  },
+  "engines": {
+    "node": "18.x"
+  }
+}
