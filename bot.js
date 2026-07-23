@@ -1,5 +1,18 @@
 const bedrock = require('bedrock-protocol');
+const http = require('http');
 
+// 1. 建立一個簡單的 HTTP 伺服器，用來應付 Render Web Service 的 Port 需求
+const server = http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.end('Aternos AFK Bot is running!\n');
+});
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+  console.log(`[HTTP] 網頁伺服器已在 Port ${PORT} 啟動`);
+});
+
+// 2. 你的 Minecraft 基岩版掛機機器人邏輯
 function createBot() {
   console.log('[狀態] 正在嘗試連線到 Aternos 伺服器...');
   
