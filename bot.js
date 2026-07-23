@@ -2,6 +2,10 @@ const bedrock = require('bedrock-protocol');
 const http = require('http');
 const url = require('url');
 const https = require('https');
+const { GoogleGenAI } = require('@google/genai');
+
+// 直接使用你提供的 API 金鑰初始化 Gemini AI
+const ai = new GoogleGenAI({ apiKey: 'AQ.Ab8RN6KOQiJ0hVNzWPg2FhRjPVZIpBFqcXhyTPLPJlcizjpSVw' });
 
 let bot1Client = null;
 let bot2Client = null;
@@ -104,6 +108,37 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // 處理 AI 生成公告/活動內文 API
+  if (pathname === '/api/ai_generate') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const params = new URLSearchParams(body);
+        const promptText = params.get('prompt') || '';
+        const type = params.get('type') || 'announce';
+
+        const systemPrompt = type === 'event' 
+          ? '你是一個專業的 Minecraft 伺服器活動策劃人。請根據使用者的提示，撰寫一份吸引人、熱情且排版精美的 Minecraft 伺服器活動公告內文（使用 Markdown 格式，包含活動主旨、時間、獎勵與規則提示）。'
+          : '你是一個專業的 Minecraft 伺服器管理員。請根據使用者的提示，撰寫一份嚴肅、清晰、專業的 Minecraft 伺服器重要公告內文（使用 Markdown 格式）。';
+
+        const response = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: [
+            { role: 'user', parts: [{ text: systemPrompt + '\n\n提示內容：' + promptText }] }
+          ]
+        });
+
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ success: true, text: response.text }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ success: false, error: err.message }));
+      }
+    });
+    return;
+  }
+
   // 處理 Discord 發布 API
   if (pathname === '/api/discord') {
     let body = '';
@@ -167,15 +202,18 @@ const server = http.createServer((req, res) => {
         .btn-reconnect:hover { background: #e53935; }
         .btn-action { background: #4CAF50; color: white; width: 100%; padding: 10px; margin-top: 10px; }
         .btn-action:hover { background: #43a047; }
+        .btn-ai { background: #9C27B0; color: white; width: 100%; padding: 10px; margin-top: 10px; }
+        .btn-ai:hover { background: #7B1FA2; }
         label { font-size: 12px; color: #aaa; display: block; margin-bottom: 3px; margin-top: 8px; }
         input[type="text"], textarea, select { width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #444; background: #2a2a2a; color: #fff; box-sizing: border-box; margin-bottom: 8px; font-family: inherit; }
-        textarea { resize: vertical; height: 80px; }
+        textarea { resize: vertical; height: 90px; }
         .result-box { background: #2a2a2a; border-left: 4px solid #FF9800; padding: 10px; margin-top: 10px; border-radius: 4px; font-size: 13px; display: none; }
+        .ai-box { background: #251d2a; border: 1px dashed #9C27B0; padding: 12px; border-radius: 8px; margin-bottom: 12px; }
       </style>
     </head>
     <body>
       <h1>Minecraft 伺服器管理與掛機控制台</h1>
-      <p class="subtitle">機器人穩定在線掛機、Discord 公告/活動發布、伺服器規則違規檢測系統</p>
+      <p class="subtitle">機器人穩定在線掛機、AI 智慧生成文案、Discord 公告/活動發布與規則檢測</p>
       
       <div class="container">
         <!-- Bot 1 狀態卡片 -->
@@ -194,9 +232,17 @@ const server = http.createServer((req, res) => {
           <button class="btn-reconnect" onclick="reconnectBot('2')">🔄 強制重連 Bot 2</button>
         </div>
 
-        <!-- 管理員功能：Discord 公告與活動發布 -->
+        <!-- 管理員功能：Discord 公告與活動發布 (含 AI 生成) -->
         <div class="wide-card">
-          <h3>📢 Discord 管理員發布系統</h3>
+          <h3>📢 Discord 公告與活動發布系統</h3>
+          
+          <!-- AI 智慧幫手區塊 -->
+          <div class="ai-box">
+            <label style="color: #BA68C8; font-weight: bold;">✨ AI 智慧文案生成幫手：</label>
+            <input type="text" id="ai_prompt" placeholder="輸入主題或想法（例如：舉辦周末建築大賽，獎品是獨家稱號與道具）">
+            <button class="btn-ai" onclick="generateWithAI()">🤖 請 AI 自動生成公告 / 活動文案</button>
+          </div>
+
           <div style="display: flex; gap: 15px; flex-wrap: wrap;">
             <div style="flex: 1; min-width: 280px;">
               <label>發布類型：</label>
@@ -208,7 +254,7 @@ const server = http.createServer((req, res) => {
               <input type="text" id="discord_title" placeholder="輸入訊息標題...">
             </div>
             <div style="flex: 2; min-width: 280px;">
-              <label>內文內容：</label>
+              <label>內文內容（可由 AI 生成或自行編輯）：</label>
               <textarea id="discord_content" placeholder="請輸入要發布到 Discord 的詳細內容..."></textarea>
               <button class="btn-action" onclick="sendDiscord()">發布至 Discord 頻道</button>
             </div>
@@ -229,6 +275,38 @@ const server = http.createServer((req, res) => {
       <script>
         function reconnectBot(botId) {
           fetch('/api/control?bot=' + botId + '&action=reconnect').then(() => location.reload());
+        }
+
+        function generateWithAI() {
+          const prompt = document.getElementById('ai_prompt').value;
+          const type = document.getElementById('discord_type').value;
+          if (!prompt) return alert('請先輸入 AI 生成提示與想法！');
+
+          const btn = event.target;
+          btn.innerText = '⏳ AI 正在努力創作中...';
+          btn.disabled = true;
+
+          fetch('/api/ai_generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'prompt=' + encodeURIComponent(prompt) + '&type=' + encodeURIComponent(type)
+          })
+          .then(res => res.json())
+          .then(data => {
+            btn.innerText = '🤖 請 AI 自動生成公告 / 活動文案';
+            btn.disabled = false;
+            if (data.success) {
+              document.getElementById('discord_content').value = data.text;
+              alert('AI 文案生成成功！已自動填入內文欄位。');
+            } else {
+              alert('生成失敗: ' + data.error);
+            }
+          })
+          .catch(err => {
+            btn.innerText = '🤖 請 AI 自動生成公告 / 活動文案';
+            btn.disabled = false;
+            alert('發生錯誤：' + err.message);
+          });
         }
 
         function sendDiscord() {
