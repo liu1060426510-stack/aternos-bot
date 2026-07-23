@@ -4,7 +4,6 @@ const url = require('url');
 const https = require('https');
 const { GoogleGenAI } = require('@google/genai');
 
-// 自動讀取系統環境變數中的 GEMINI_API_KEY
 const ai = new GoogleGenAI();
 
 let bot1Client = null;
@@ -13,11 +12,9 @@ let bot2Client = null;
 let bot1Status = { name: 'Bot 1 (Nick-2mc)', status: '初始化中...', server: 'nick-2mc.aternos.me:50109' };
 let bot2Status = { name: 'Bot 2 (Nick-1mc)', status: '初始化中...', server: 'Nick-1mc.aternos.me:17440' };
 
-// Discord Webhook 網址
 const DISCORD_WEBHOOK_EVENTS = 'https://discord.com/api/webhooks/1529869916889551058/jb3O5cnI7ZHUYRV2zlhumBEpBhd4T1XR7R64Swa5zVhIlNI--OCsgVyhRMlwt-o-f-sc';
 const DISCORD_WEBHOOK_ANNOUNCE = 'https://discord.com/api/webhooks/1529870217566617650/Y0XkDcl8fgdnWIgidLeMTq7BhMAmohqDTqys9Myipi6ze_5yVN9x9DWaxFmnPJhKTSun';
 
-// 內嵌式伺服器核心規則與背景知識
 const SERVER_RULES_TEXT = `
 ==================================================
         Minecraft 伺服器核心守則與管理指南
@@ -42,7 +39,6 @@ const SERVER_RULES_TEXT = `
 - 重度違規：永久封禁 (Ban) 並清除違禁方塊。
 `;
 
-// 發送 Discord 訊息函式
 function sendDiscordWebhook(webhookUrl, content, title) {
   return new Promise((resolve, reject) => {
     const data = JSON.stringify({
@@ -77,7 +73,6 @@ function sendDiscordWebhook(webhookUrl, content, title) {
   });
 }
 
-// 伺服器規則與違規分析引擎
 function checkRuleViolation(actionText) {
   const text = actionText.toLowerCase();
   
@@ -109,7 +104,6 @@ function checkRuleViolation(actionText) {
   return { rule: '未明確觸發已知條例', punishment: '需管理員人工審視', desc: '請對照現行伺服器守則進行人工判斷。' };
 }
 
-// 建立網頁控制與管理伺服器
 const server = http.createServer((req, res) => {
   const parsedUrl = url.parse(req.url, true);
   const pathname = parsedUrl.pathname;
@@ -133,7 +127,6 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // 處理 AI 生成公告/活動內文 API（自動帶入內建守則作為背景知識）
   if (pathname === '/api/ai_generate') {
     let body = '';
     req.on('data', chunk => { body += chunk; });
@@ -164,7 +157,6 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // 處理 Discord 發布 API
   if (pathname === '/api/discord') {
     let body = '';
     req.on('data', chunk => { body += chunk; });
@@ -190,7 +182,6 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // 處理違規檢測 API
   if (pathname === '/api/check_rule') {
     let body = '';
     req.on('data', chunk => { body += chunk; });
@@ -205,7 +196,6 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // 管理面板前端網頁介面
   res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
   res.end(`
     <!DOCTYPE html>
@@ -241,7 +231,6 @@ const server = http.createServer((req, res) => {
       <p class="subtitle">機器人穩定掛機、AI 智慧文案生成、Discord 發布與規則檢測</p>
       
       <div class="container">
-        <!-- Bot 1 狀態卡片 -->
         <div class="card">
           <h3>${bot1Status.name}</h3>
           <p>伺服器：<code>${bot1Status.server}</code></p>
@@ -249,7 +238,6 @@ const server = http.createServer((req, res) => {
           <button class="btn-reconnect" onclick="reconnectBot('1')">🔄 強制重連 Bot 1</button>
         </div>
 
-        <!-- Bot 2 狀態卡片 -->
         <div class="card">
           <h3>${bot2Status.name}</h3>
           <p>伺服器：<code>${bot2Status.server}</code></p>
@@ -257,16 +245,9 @@ const server = http.createServer((req, res) => {
           <button class="btn-reconnect" onclick="reconnectBot('2')">🔄 強制重連 Bot 2</button>
         </div>
 
-        <!-- 管理員功能：Discord 公告與活動發布 (含 AI 智慧生成) -->
         <div class="wide-card">
-          <h3>📢 Discord 公告與活動發布系統</h3>
+          <h3>📢 Discord 管理員發布系統</h3>
           
-          <div class="ai-box">
-            <label style="color: #BA68C8; font-weight: bold;">✨ AI 智慧文案生成幫手（自動參考伺服器規範）：</label>
-            <input type="text" id="ai_prompt" placeholder="輸入主題或想法（例如：舉辦周末建築大賽，請強調遵守伺服器規則）">
-            <button class="btn-ai" onclick="generateWithAI()">🤖 請 AI 依據規範自動生成文案</button>
-          </div>
-
           <div style="display: flex; gap: 15px; flex-wrap: wrap;">
             <div style="flex: 1; min-width: 280px;">
               <label>發布類型：</label>
@@ -276,19 +257,22 @@ const server = http.createServer((req, res) => {
               </select>
               <label>標題：</label>
               <input type="text" id="discord_title" placeholder="輸入訊息標題...">
+              
+              <label style="color: #BA68C8; font-weight: bold; margin-top: 12px;">✨ AI 智慧文案提示：</label>
+              <input type="text" id="ai_prompt" placeholder="輸入想法（例如：周末辦建築大賽）">
             </div>
+            
             <div style="flex: 2; min-width: 280px;">
-              <label>內文內容（可由 AI 生成或自行編輯）：</label>
+              <label>內文內容：</label>
               <textarea id="discord_content" placeholder="請輸入要發布到 Discord 的詳細內容..."></textarea>
-              <button class="btn-action" onclick="sendDiscord()">發布至 Discord 頻道</button>
+              <button class="btn-ai" onclick="generateAndSendAI()">🤖 開始生成按鈕並發布</button>
             </div>
           </div>
         </div>
 
-        <!-- 管理員功能：伺服器規則違規檢測器 -->
         <div class="wide-card">
           <h3>⚖️ 伺服器規則與違規分析檢測器</h3>
-          <label>輸入玩家行為描述或舉報內容（例如：「某某玩家在地下挖到並放置黑曜石」或「有人開外掛飛行」）：</label>
+          <label>輸入玩家行為描述或舉報內容：</label>
           <input type="text" id="rule_input" placeholder="輸入要檢測的行為...">
           <button class="btn-action" style="background: #2196F3;" onclick="checkRule()">檢測違規條例與建議處罰</button>
           
@@ -301,60 +285,52 @@ const server = http.createServer((req, res) => {
           fetch('/api/control?bot=' + botId + '&action=reconnect').then(() => location.reload());
         }
 
-        function generateWithAI() {
+        async function generateAndSendAI() {
           const prompt = document.getElementById('ai_prompt').value;
           const type = document.getElementById('discord_type').value;
+          const title = document.getElementById('discord_title').value;
+          
           if (!prompt) return alert('請先輸入 AI 生成提示與想法！');
 
           const btn = event.target;
-          btn.innerText = '⏳ AI 正在努力創作中...';
+          btn.innerText = '⏳ AI 正在生成並發布中...';
           btn.disabled = true;
 
-          fetch('/api/ai_generate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: 'prompt=' + encodeURIComponent(prompt) + '&type=' + encodeURIComponent(type)
-          })
-          .then(res => res.json())
-          .then(data => {
-            btn.innerText = '🤖 請 AI 依據規範自動生成文案';
-            btn.disabled = false;
-            if (data.success) {
-              document.getElementById('discord_content').value = data.text;
-              alert('AI 文案生成成功！已自動填入內文欄位。');
-            } else {
-              alert('生成失敗: ' + data.error);
+          try {
+            // 1. 呼叫 AI 生成文案
+            const aiRes = await fetch('/api/ai_generate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: 'prompt=' + encodeURIComponent(prompt) + '&type=' + encodeURIComponent(type)
+            });
+            const aiData = await aiRes.json();
+
+            if (!aiData.success) {
+              throw new Error(aiData.error);
             }
-          })
-          .catch(err => {
-            btn.innerText = '🤖 請 AI 依據規範自動生成文案';
-            btn.disabled = false;
+
+            // 自動填入輸入框讓畫面看得到
+            document.getElementById('discord_content').value = aiData.text;
+
+            // 2. 直接發布至 Discord
+            const discRes = await fetch('/api/discord', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: 'type=' + encodeURIComponent(type) + '&title=' + encodeURIComponent(title) + '&content=' + encodeURIComponent(aiData.text)
+            });
+            const discData = await discRes.json();
+
+            if (discData.success) {
+              alert('🎉 AI 文案生成成功，並已順利發布至 Discord！');
+            } else {
+              alert('文案已生成，但 Discord 發布失敗: ' + discData.error);
+            }
+          } catch (err) {
             alert('發生錯誤：' + err.message);
-          });
-        }
-
-        function sendDiscord() {
-          const type = document.getElementById('discord_type').value;
-          const title = document.getElementById('discord_title').value;
-          const content = document.getElementById('discord_content').value;
-
-          if (!content) return alert('請輸入內文內容！');
-
-          fetch('/api/discord', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: 'type=' + encodeURIComponent(type) + '&title=' + encodeURIComponent(title) + '&content=' + encodeURIComponent(content)
-          })
-          .then(res => res.json())
-          .then(data => {
-            if (data.success) {
-              alert('成功發布至 Discord！');
-              document.getElementById('discord_content').value = '';
-              document.getElementById('discord_title').value = '';
-            } else {
-              alert('發布失敗: ' + data.error);
-            }
-          });
+          } finally {
+            btn.innerText = '🤖 開始生成按鈕並發布';
+            btn.disabled = false;
+          }
         }
 
         function checkRule() {
@@ -388,27 +364,22 @@ server.listen(PORT, () => {
   console.log(`[HTTP] 管理控制面板已在 Port ${PORT} 啟動`);
 });
 
-// 1. 啟動第一個機器人
 function createBot1() {
   bot1Status.status = '正在嘗試連線...';
-  
   bot1Client = bedrock.createClient({
     host: 'nick-2mc.aternos.me',
     port: 50109,
     username: 'AternosBot1',
     offline: true
   });
-
   bot1Client.on('connect', () => { bot1Status.status = '已建立底層連線'; });
   bot1Client.on('spawn', () => { bot1Status.status = '🟢 已進入遊戲世界穩定掛機中'; });
-  
   bot1Client.on('text', (packet) => {
     if (packet.message && (packet.message.includes('died') || packet.message.includes('死'))) {
       bot1Status.status = '💀 機器人死亡，正在自動重新連線...';
       try { bot1Client.close(); } catch(e){}
     }
   });
-
   bot1Client.on('kick', (reason) => { bot1Status.status = `🔴 被踢出: ${JSON.stringify(reason)}`; });
   bot1Client.on('close', () => {
     bot1Status.status = '🟡 斷線中，2秒後重試...';
@@ -420,27 +391,22 @@ function createBot1() {
   });
 }
 
-// 2. 啟動第二個機器人
 function createBot2() {
   bot2Status.status = '正在嘗試連線...';
-  
   bot2Client = bedrock.createClient({
     host: 'Nick-1mc.aternos.me',
     port: 17440,
     username: 'AternosBot2',
     offline: true
   });
-
   bot2Client.on('connect', () => { bot2Status.status = '已建立底層連線'; });
   bot2Client.on('spawn', () => { bot2Status.status = '🟢 已進入遊戲世界穩定掛機中'; });
-  
   bot2Client.on('text', (packet) => {
     if (packet.message && (packet.message.includes('died') || packet.message.includes('死'))) {
       bot2Status.status = '💀 機器人死亡，正在自動重新連線...';
       try { bot2Client.close(); } catch(e){}
     }
   });
-
   bot2Client.on('kick', (reason) => { bot2Status.status = `🔴 被踢出: ${JSON.stringify(reason)}`; });
   bot2Client.on('close', () => {
     bot2Status.status = '🟡 斷線中，2秒後重試...';
