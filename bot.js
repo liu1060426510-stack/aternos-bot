@@ -4,8 +4,8 @@ const url = require('url');
 const https = require('https');
 const { GoogleGenAI } = require('@google/genai');
 
-// 直接使用你提供的 API 金鑰初始化 Gemini AI
-const ai = new GoogleGenAI({ apiKey: 'AQ.Ab8RN6KOQiJ0hVNzWPg2FhRjPVZIpBFqcXhyTPLPJlcizjpSVw' });
+// 使用方案二：自動從系統環境變數讀取 GEMINI_API_KEY
+const ai = new GoogleGenAI();
 
 let bot1Client = null;
 let bot2Client = null;
