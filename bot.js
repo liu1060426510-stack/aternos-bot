@@ -297,7 +297,6 @@ const server = http.createServer((req, res) => {
           btn.disabled = true;
 
           try {
-            // 1. 呼叫 AI 生成文案
             const aiRes = await fetch('/api/ai_generate', {
               method: 'POST',
               headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -309,10 +308,8 @@ const server = http.createServer((req, res) => {
               throw new Error(aiData.error);
             }
 
-            // 自動填入輸入框讓畫面看得到
             document.getElementById('discord_content').value = aiData.text;
 
-            // 2. 直接發布至 Discord
             const discRes = await fetch('/api/discord', {
               method: 'POST',
               headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
