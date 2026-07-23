@@ -1,15 +1,13 @@
 {
-  "name": "aternos-bedrock-bot",
+  "name": "minecraft-bot-panel",
   "version": "1.0.0",
-  "description": "Aternos Bedrock AFK Bot",
+  "description": "Minecraft Bedrock Bot & Admin Panel",
   "main": "bot.js",
   "scripts": {
     "start": "node bot.js"
   },
   "dependencies": {
-    "bedrock-protocol": "*"
-  },
-  "engines": {
-    "node": "18.x"
+    "@google/genai": "^0.1.1",
+    "bedrock-protocol": "^3.15.0"
   }
 }
