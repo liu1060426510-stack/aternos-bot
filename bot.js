@@ -2,9 +2,11 @@ const bedrock = require('bedrock-protocol');
 const http = require('http');
 const url = require('url');
 const https = require('https');
+const fs = require('fs');
+const path = require('path');
 const { GoogleGenAI } = require('@google/genai');
 
-// 使用方案二：自動從系統環境變數讀取 GEMINI_API_KEY
+// 自動讀取系統環境變數中的 GEMINI_API_KEY
 const ai = new GoogleGenAI();
 
 let bot1Client = null;
@@ -16,6 +18,27 @@ let bot2Status = { name: 'Bot 2 (Nick-1mc)', status: '初始化中...', server: 
 // Discord Webhook 網址
 const DISCORD_WEBHOOK_EVENTS = 'https://discord.com/api/webhooks/1529869916889551058/jb3O5cnI7ZHUYRV2zlhumBEpBhd4T1XR7R64Swa5zVhIlNI--OCsgVyhRMlwt-o-f-sc';
 const DISCORD_WEBHOOK_ANNOUNCE = 'https://discord.com/api/webhooks/1529870217566617650/Y0XkDcl8fgdnWIgidLeMTq7BhMAmohqDTqys9Myipi6ze_5yVN9x9DWaxFmnPJhKTSun';
+
+// 讀取外部伺服器文件/規則檔的函式
+function getLoadedServerRules() {
+  const filePath = path.join(__dirname, 'server_rules.txt');
+  try {
+    if (fs.existsSync(filePath)) {
+      return fs.readFileSync(filePath, 'utf8');
+    }
+  } catch (err) {
+    console.log('[系統提示] 尚未建立 server_rules.txt 文件，將使用預設核心守則。');
+  }
+  return `
+    核心守則：
+    1. 尊重他人：禁止歧視、人身攻擊、挑釁或霸凌行為。
+    2. 公平競爭：嚴禁使用任何外掛、輔助程式、腳本或修改客戶端，違者永久封禁。
+    3. 禁止破壞：請勿惡意破壞他人建築或搶劫他人財物。
+    4. 禮貌聊天：禁止洗頻、散布惡意連結或進行商業廣告。
+    方塊與建築限制：禁止使用黑曜石與基岩。
+    性能友善：禁止建造會導致伺服器延遲 (Lag) 的大型循環裝置。
+  `;
+}
 
 // 發送 Discord 訊息函式
 function sendDiscordWebhook(webhookUrl, content, title) {
@@ -52,9 +75,10 @@ function sendDiscordWebhook(webhookUrl, content, title) {
   });
 }
 
-// 伺服器規則與違規分析引擎
+// 伺服器規則與違規分析引擎（結合文件檔）
 function checkRuleViolation(actionText) {
   const text = actionText.toLowerCase();
+  const rulesContent = getLoadedServerRules();
   
   if (text.includes('外掛') || text.includes('輔助') || text.includes('腳本') || text.includes('修改客戶端')) {
     return { rule: '公平競爭', punishment: '封禁 (Ban)', desc: '嚴禁使用任何外掛、輔助程式或腳本，違者永久封禁。' };
@@ -81,7 +105,7 @@ function checkRuleViolation(actionText) {
     return { rule: '戰鬥與 PVP (禁止惡意攻擊)', punishment: '警告 / 監禁', desc: '禁止攻擊掛機玩家或新人。' };
   }
 
-  return { rule: '未明確觸發已知條例', punishment: '需管理員人工審視', desc: '請對照伺服器核心守則進行人工判斷。' };
+  return { rule: '未明確觸發已知條例（已參考 server_rules.txt）', punishment: '需管理員人工審視', desc: '請對照現行伺服器規則文件進行人工判斷。' };
 }
 
 // 建立網頁控制與管理伺服器
@@ -108,7 +132,7 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // 處理 AI 生成公告/活動內文 API
+  // 處理 AI 生成公告/活動內文 API（自動帶入 server_rules.txt 內容作為背景知識）
   if (pathname === '/api/ai_generate') {
     let body = '';
     req.on('data', chunk => { body += chunk; });
@@ -117,15 +141,17 @@ const server = http.createServer((req, res) => {
         const params = new URLSearchParams(body);
         const promptText = params.get('prompt') || '';
         const type = params.get('type') || 'announce';
+        
+        const serverRules = getLoadedServerRules();
 
         const systemPrompt = type === 'event' 
-          ? '你是一個專業的 Minecraft 伺服器活動策劃人。請根據使用者的提示，撰寫一份吸引人、熱情且排版精美的 Minecraft 伺服器活動公告內文（使用 Markdown 格式，包含活動主旨、時間、獎勵與規則提示）。'
-          : '你是一個專業的 Minecraft 伺服器管理員。請根據使用者的提示，撰寫一份嚴肅、清晰、專業的 Minecraft 伺服器重要公告內文（使用 Markdown 格式）。';
+          ? `你是一個專業的 Minecraft 伺服器活動策劃人。請根據以下伺服器背景規則與使用者提示，撰寫一份吸引人、熱情且排版精美的 Minecraft 伺服器活動公告內文（使用 Markdown 格式）。\n\n【伺服器參考文件】：\n${serverRules}`
+          : `你是一個專業的 Minecraft 伺服器管理員。請根據以下伺服器背景規則與使用者提示，撰寫一份嚴肅、清晰、專業的 Minecraft 伺服器重要公告內文（使用 Markdown 格式）。\n\n【伺服器參考文件】：\n${serverRules}`;
 
         const response = await ai.models.generateContent({
           model: 'gemini-2.5-flash',
           contents: [
-            { role: 'user', parts: [{ text: systemPrompt + '\n\n提示內容：' + promptText }] }
+            { role: 'user', parts: [{ text: systemPrompt + '\n\n使用者提示內容：' + promptText }] }
           ]
         });
 
@@ -213,7 +239,7 @@ const server = http.createServer((req, res) => {
     </head>
     <body>
       <h1>Minecraft 伺服器管理與掛機控制台</h1>
-      <p class="subtitle">機器人穩定在線掛機、AI 智慧生成文案、Discord 公告/活動發布與規則檢測</p>
+      <p class="subtitle">機器人穩定掛機、AI 智慧文案（已讀取 server_rules.txt）、Discord 發布與規則檢測</p>
       
       <div class="container">
         <!-- Bot 1 狀態卡片 -->
@@ -232,15 +258,15 @@ const server = http.createServer((req, res) => {
           <button class="btn-reconnect" onclick="reconnectBot('2')">🔄 強制重連 Bot 2</button>
         </div>
 
-        <!-- 管理員功能：Discord 公告與活動發布 (含 AI 生成) -->
+        <!-- 管理員功能：Discord 公告與活動發布 (含檔案背景 AI 生成) -->
         <div class="wide-card">
           <h3>📢 Discord 公告與活動發布系統</h3>
           
           <!-- AI 智慧幫手區塊 -->
           <div class="ai-box">
-            <label style="color: #BA68C8; font-weight: bold;">✨ AI 智慧文案生成幫手：</label>
-            <input type="text" id="ai_prompt" placeholder="輸入主題或想法（例如：舉辦周末建築大賽，獎品是獨家稱號與道具）">
-            <button class="btn-ai" onclick="generateWithAI()">🤖 請 AI 自動生成公告 / 活動文案</button>
+            <label style="color: #BA68C8; font-weight: bold;">✨ AI 智慧文案生成幫手（自動參考 server_rules.txt 文件）：</label>
+            <input type="text" id="ai_prompt" placeholder="輸入主題或想法（例如：舉辦周末建築大賽，請強調遵守伺服器規則）">
+            <button class="btn-ai" onclick="generateWithAI()">🤖 請 AI 依據規則文件生成文案</button>
           </div>
 
           <div style="display: flex; gap: 15px; flex-wrap: wrap;">
@@ -283,7 +309,7 @@ const server = http.createServer((req, res) => {
           if (!prompt) return alert('請先輸入 AI 生成提示與想法！');
 
           const btn = event.target;
-          btn.innerText = '⏳ AI 正在努力創作中...';
+          btn.innerText = '⏳ AI 正在讀取文件並努力創作中...';
           btn.disabled = true;
 
           fetch('/api/ai_generate', {
@@ -293,7 +319,7 @@ const server = http.createServer((req, res) => {
           })
           .then(res => res.json())
           .then(data => {
-            btn.innerText = '🤖 請 AI 自動生成公告 / 活動文案';
+            btn.innerText = '🤖 請 AI 依據規則文件生成文案';
             btn.disabled = false;
             if (data.success) {
               document.getElementById('discord_content').value = data.text;
@@ -303,7 +329,7 @@ const server = http.createServer((req, res) => {
             }
           })
           .catch(err => {
-            btn.innerText = '🤖 請 AI 自動生成公告 / 活動文案';
+            btn.innerText = '🤖 請 AI 依據規則文件生成文案';
             btn.disabled = false;
             alert('發生錯誤：' + err.message);
           });
