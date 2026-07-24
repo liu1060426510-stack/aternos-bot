@@ -1,12 +1,11 @@
 {
-  "name": "minecraft-bot-panel",
+  "name": "minecraft-bot-simple",
   "version": "1.0.0",
   "main": "bot.js",
   "scripts": {
     "start": "node bot.js"
   },
   "dependencies": {
-    "@google/genai": "latest",
     "bedrock-protocol": "^3.15.0"
   }
 }
