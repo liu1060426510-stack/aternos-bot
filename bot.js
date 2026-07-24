@@ -223,7 +223,6 @@ const server = http.createServer((req, res) => {
         input[type="text"], textarea, select { width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #444; background: #2a2a2a; color: #fff; box-sizing: border-box; margin-bottom: 8px; font-family: inherit; }
         textarea { resize: vertical; height: 90px; }
         .result-box { background: #2a2a2a; border-left: 4px solid #FF9800; padding: 10px; margin-top: 10px; border-radius: 4px; font-size: 13px; display: none; }
-        .ai-box { background: #251d2a; border: 1px dashed #9C27B0; padding: 12px; border-radius: 8px; margin-bottom: 12px; }
       </style>
     </head>
     <body>
@@ -376,17 +375,16 @@ function createBot1() {
   bot1Client.on('spawn', () => {
     bot1Status.status = '🟢 已進入遊戲世界穩定掛機中';
     
-    // 每 2 秒自動跳躍一次
     if (jumpInterval) clearInterval(jumpInterval);
     jumpInterval = setInterval(() => {
       try {
         bot1Client.queue('player_auth_input', {
           pitch: 0,
           yaw: 0,
-          position: bot1Status.position || { x: 0, y: 0, z: 0 },
+          position: { x: 0, y: 0, z: 0 },
           move_vector: { x: 0, z: 0 },
           head_yaw: 0,
-          input_data: 0x01, // 模擬跳躍輸入
+          input_data: 0x01,
           input_command_source: 0,
           player_action: 0,
           interaction_model: 0,
@@ -438,7 +436,6 @@ function createBot2() {
   bot2Client.on('spawn', () => {
     bot2Status.status = '🟢 已進入遊戲世界穩定掛機中';
     
-    // 每 2 秒自動跳躍一次
     if (jumpInterval2) clearInterval(jumpInterval2);
     jumpInterval2 = setInterval(() => {
       try {
