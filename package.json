@@ -1,13 +1,12 @@
 {
   "name": "minecraft-bot-panel",
   "version": "1.0.0",
-  "description": "Minecraft Bedrock Bot & Admin Panel",
   "main": "bot.js",
   "scripts": {
     "start": "node bot.js"
   },
   "dependencies": {
-    "@google/genai": "^0.1.1",
+    "@google/genai": "latest",
     "bedrock-protocol": "^3.15.0"
   }
 }
