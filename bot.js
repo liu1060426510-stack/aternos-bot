@@ -1,10 +1,5 @@
 const bedrock = require('bedrock-protocol');
 const http = require('http');
-const url = require('url');
-const https = require('https');
-const { GoogleGenAI } = require('@google/genai');
-
-const ai = new GoogleGenAI();
 
 let bot1Client = null;
 let bot2Client = null;
@@ -12,343 +7,70 @@ let bot2Client = null;
 let bot1Status = { name: 'Bot 1 (Nick-2mc)', status: '初始化中...', server: 'nick-2mc.aternos.me:50109' };
 let bot2Status = { name: 'Bot 2 (Nick-1mc)', status: '初始化中...', server: 'Nick-1mc.aternos.me:17440' };
 
-const DISCORD_WEBHOOK_EVENTS = 'https://discord.com/api/webhooks/1529869916889551058/jb3O5cnI7ZHUYRV2zlhumBEpBhd4T1XR7R64Swa5zVhIlNI--OCsgVyhRMlwt-o-f-sc';
-const DISCORD_WEBHOOK_ANNOUNCE = 'https://discord.com/api/webhooks/1529870217566617650/Y0XkDcl8fgdnWIgidLeMTq7BhMAmohqDTqys9Myipi6ze_5yVN9x9DWaxFmnPJhKTSun';
-
-const SERVER_RULES_TEXT = `
-==================================================
-        Minecraft 伺服器核心守則與管理指南
-==================================================
-一、 核心社群守則
-1. 尊重他人：禁止任何形式的歧視、人身攻擊、惡意挑釁或霸凌行為。
-2. 禮貌聊天：嚴禁洗頻、散布惡意連結、詐騙或進行商業廣告。
-3. 公平競爭：嚴禁使用任何外掛、輔助程式、巨集腳本或修改客戶端，違者一律永久封禁 (Ban)。
-
-二、 方塊與建築限制
-1. 黑曜石限制：伺服器嚴格禁止放置與使用黑曜石，違禁品將直接清除。
-2. 基岩限制：嚴禁獲取、搬運或放置基岩。違者直接清除，嚴重者封禁。
-3. 性能友善：禁止建造會導致伺服器延遲 (Lag) 的大型紅石循環裝置。
-
-三、 遊戲行為規範
-1. 禁止破壞：請勿惡意破壞他人建築或搶劫他人財物。
-2. 戰鬥與 PVP：禁止惡意攻擊掛機玩家或新進伺服器的新人。
-
-四、 違規處罰分級說明
-- 輕微違規：給予警告或禁言處分。
-- 中度違規：進行監禁或暫時禁言。
-- 重度違規：永久封禁 (Ban) 並清除違禁方塊。
-`;
-
-function sendDiscordWebhook(webhookUrl, content, title) {
-  return new Promise((resolve, reject) => {
-    const data = JSON.stringify({
-      embeds: [{
-        title: title || '伺服器通知',
-        description: content,
-        color: 5814783,
-        timestamp: new Date().toISOString()
-      }]
-    });
-
-    const parsedUrl = new URL(webhookUrl);
-    const options = {
-      hostname: parsedUrl.hostname,
-      path: parsedUrl.pathname + parsedUrl.search,
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(data)
-      }
-    };
-
-    const req = https.request(options, (res) => {
-      let responseBody = '';
-      res.on('data', chunk => responseBody += chunk);
-      res.on('end', () => resolve(responseBody));
-    });
-
-    req.on('error', (err) => reject(err));
-    req.write(data);
-    req.end();
-  });
-}
-
-function checkRuleViolation(actionText) {
-  const text = actionText.toLowerCase();
-  
-  if (text.includes('外掛') || text.includes('輔助') || text.includes('腳本') || text.includes('修改客戶端')) {
-    return { rule: '公平競爭', punishment: '封禁 (Ban)', desc: '嚴禁使用任何外掛、輔助程式或腳本，違者永久封禁。' };
-  }
-  if (text.includes('黑曜石')) {
-    return { rule: '方塊與建築限制 - 黑曜石', punishment: '違禁品直接清除', desc: '伺服器禁止放置與使用黑曜石。' };
-  }
-  if (text.includes('基岩')) {
-    return { rule: '方塊與建築限制 - 基岩', punishment: '違禁品直接清除 / 嚴重者封禁', desc: '嚴禁獲取或放置任何形式的基岩。' };
-  }
-  if (text.includes('破壞') || text.includes('搶劫') || text.includes('偷竊')) {
-    return { rule: '禁止破壞', punishment: '禁言 / 監禁 / 封禁', desc: '請勿惡意破壞他人建築或搶劫他人財物。' };
-  }
-  if (text.includes('洗頻') || text.includes('廣告') || text.includes('惡意連結')) {
-    return { rule: '禮貌聊天', punishment: '警告 / 禁言', desc: '禁止洗頻、散布惡意連結或進行商業廣告。' };
-  }
-  if (text.includes('歧視') || text.includes('人身攻擊') || text.includes('霸凌') || text.includes('挑釁')) {
-    return { rule: '尊重他人', punishment: '警告 / 禁言 / 封禁', desc: '禁止歧視、人身攻擊、挑釁或霸凌行為。' };
-  }
-  if (text.includes('lag') || text.includes('延遲') || text.includes('循環裝置')) {
-    return { rule: '性能友善', punishment: '警告並拆除裝置', desc: '禁止建造會導致伺服器延遲 (Lag) 的大型循環裝置。' };
-  }
-  if (text.includes('攻擊新人') || text.includes('攻擊掛機')) {
-    return { rule: '戰鬥與 PVP (禁止惡意攻擊)', punishment: '警告 / 監禁', desc: '禁止攻擊掛機玩家或新人。' };
-  }
-
-  return { rule: '未明確觸發已知條例', punishment: '需管理員人工審視', desc: '請對照現行伺服器守則進行人工判斷。' };
-}
-
+// 建立輕量級 HTTP 伺服器（提供健康檢查與公開 API 狀態查詢）
 const server = http.createServer((req, res) => {
-  const parsedUrl = url.parse(req.url, true);
-  const pathname = parsedUrl.pathname;
-
-  if (pathname === '/api/control') {
-    const botId = parsedUrl.query.bot;
-    const action = parsedUrl.query.action;
-
-    if (action === 'reconnect') {
-      if (botId === '1') {
-        if (bot1Client) try { bot1Client.close(); } catch(e){}
-        createBot1();
-      } else if (botId === '2') {
-        if (bot2Client) try { bot2Client.close(); } catch(e){}
-        createBot2();
-      }
-    }
-
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ success: true }));
+  if (req.url === '/api/status') {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({
+      success: true,
+      bots: [bot1Status, bot2Status],
+      uptime: process.uptime()
+    }));
     return;
   }
 
-  if (pathname === '/api/ai_generate') {
-    let body = '';
-    req.on('data', chunk => { body += chunk; });
-    req.on('end', async () => {
-      try {
-        const params = new URLSearchParams(body);
-        const promptText = params.get('prompt') || '';
-        const type = params.get('type') || 'announce';
-
-        const systemPrompt = type === 'event' 
-          ? `你是一個專業的 Minecraft 伺服器活動策劃人。請根據以下伺服器背景規則與使用者提示，撰寫一份吸引人、熱情且排版精美的 Minecraft 伺服器活動公告內文（使用 Markdown 格式）。\n\n【伺服器參考規範】：\n${SERVER_RULES_TEXT}`
-          : `你是一個專業的 Minecraft 伺服器管理員。請根據以下伺服器背景規則與使用者提示，撰寫一份嚴肅、清晰、專業的 Minecraft 伺服器重要公告內文（使用 Markdown 格式）。\n\n【伺服器參考規範】：\n${SERVER_RULES_TEXT}`;
-
-        const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: [
-            { role: 'user', parts: [{ text: systemPrompt + '\n\n使用者提示內容：' + promptText }] }
-          ]
-        });
-
-        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ success: true, text: response.text }));
-      } catch (err) {
-        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ success: false, error: err.message }));
-      }
-    });
-    return;
-  }
-
-  if (pathname === '/api/discord') {
-    let body = '';
-    req.on('data', chunk => { body += chunk; });
-    req.on('end', async () => {
-      try {
-        const params = new URLSearchParams(body);
-        const type = params.get('type');
-        const content = params.get('content');
-        const title = params.get('title');
-
-        const webhookUrl = (type === 'event') ? DISCORD_WEBHOOK_EVENTS : DISCORD_WEBHOOK_ANNOUNCE;
-        const defaultTitle = (type === 'event') ? '🎉 伺服器精彩活動通知' : '📢 伺服器重要公告';
-
-        await sendDiscordWebhook(webhookUrl, content, title || defaultTitle);
-
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ success: true, message: 'Discord 訊息發布成功！' }));
-      } catch (err) {
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ success: false, error: err.message }));
-      }
-    });
-    return;
-  }
-
-  if (pathname === '/api/check_rule') {
-    let body = '';
-    req.on('data', chunk => { body += chunk; });
-    req.on('end', () => {
-      const params = new URLSearchParams(body);
-      const actionText = params.get('actionText') || '';
-      const result = checkRuleViolation(actionText);
-
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ success: true, result }));
-    });
-    return;
-  }
-
+  // 簡潔漂亮的狀態儀表板首頁
   res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
   res.end(`
     <!DOCTYPE html>
     <html>
     <head>
-      <title>Minecraft 伺服器管理與掛機控制台</title>
+      <title>Minecraft Aternos Bot 運行狀態</title>
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #121212; color: #e0e0e0; text-align: center; padding: 20px; margin: 0; }
-        h1 { color: #4CAF50; margin-bottom: 5px; }
-        .subtitle { color: #888; font-size: 14px; margin-bottom: 25px; }
-        .container { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; max-width: 1100px; margin: 0 auto; }
-        .card { background: #1e1e1e; border: 1px solid #333; border-radius: 12px; padding: 20px; width: 320px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); text-align: left; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #121212; color: #e0e0e0; text-align: center; padding: 40px; margin: 0; }
+        h1 { color: #4CAF50; margin-bottom: 10px; }
+        .subtitle { color: #888; font-size: 14px; margin-bottom: 30px; }
+        .container { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; max-width: 800px; margin: 0 auto; }
+        .card { background: #1e1e1e; border: 1px solid #333; border-radius: 12px; padding: 25px; width: 320px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); text-align: left; }
         .card h3 { margin-top: 0; color: #64B5F6; border-bottom: 1px solid #333; padding-bottom: 10px; }
-        .wide-card { background: #1e1e1e; border: 1px solid #333; border-radius: 12px; padding: 20px; width: 100%; box-shadow: 0 4px 12px rgba(0,0,0,0.5); text-align: left; box-sizing: border-box; margin-top: 20px; }
         .status { font-weight: bold; color: #FF9800; }
-        button { padding: 8px 12px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; }
-        .btn-reconnect { background: #f44336; color: white; width: 100%; padding: 10px; margin-top: 10px; }
-        .btn-reconnect:hover { background: #e53935; }
-        .btn-action { background: #4CAF50; color: white; width: 100%; padding: 10px; margin-top: 10px; }
-        .btn-action:hover { background: #43a047; }
-        .btn-ai { background: #9C27B0; color: white; width: 100%; padding: 10px; margin-top: 10px; }
-        .btn-ai:hover { background: #7B1FA2; }
-        label { font-size: 12px; color: #aaa; display: block; margin-bottom: 3px; margin-top: 8px; }
-        input[type="text"], textarea, select { width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #444; background: #2a2a2a; color: #fff; box-sizing: border-box; margin-bottom: 8px; font-family: inherit; }
-        textarea { resize: vertical; height: 90px; }
-        .result-box { background: #2a2a2a; border-left: 4px solid #FF9800; padding: 10px; margin-top: 10px; border-radius: 4px; font-size: 13px; display: none; }
+        .api-box { margin-top: 30px; background: #1e1e1e; padding: 15px; border-radius: 8px; border: 1px solid #333; display: inline-block; }
+        code { color: #81C784; }
       </style>
     </head>
     <body>
-      <h1>Minecraft 伺服器管理與掛機控制台</h1>
-      <p class="subtitle">機器人穩定掛機（每2秒自動跳躍）、AI 智慧文案生成與發布</p>
+      <h1>Minecraft 機器人掛機中心</h1>
+      <p class="subtitle">雙開機器人持續在線，每 2 秒自動跳躍維持活動狀態</p>
       
       <div class="container">
         <div class="card">
           <h3>${bot1Status.name}</h3>
           <p>伺服器：<code>${bot1Status.server}</code></p>
-          <p>狀態：<span class="status">${bot1Status.status}</span></p>
-          <button class="btn-reconnect" onclick="reconnectBot('1')">🔄 強制重連 Bot 1</button>
+          <p>狀態：<span class="status" id="b1_status">${bot1Status.status}</span></p>
         </div>
 
         <div class="card">
           <h3>${bot2Status.name}</h3>
           <p>伺服器：<code>${bot2Status.server}</code></p>
-          <p>狀態：<span class="status">${bot2Status.status}</span></p>
-          <button class="btn-reconnect" onclick="reconnectBot('2')">🔄 強制重連 Bot 2</button>
-        </div>
-
-        <div class="wide-card">
-          <h3>📢 Discord 管理員發布系統</h3>
-          
-          <div style="display: flex; gap: 15px; flex-wrap: wrap;">
-            <div style="flex: 1; min-width: 280px;">
-              <label>發布類型：</label>
-              <select id="discord_type">
-                <option value="announce">伺服器公告 (Announcement)</option>
-                <option value="event">伺服器活動 (Event)</option>
-              </select>
-              <label>標題：</label>
-              <input type="text" id="discord_title" placeholder="輸入訊息標題...">
-              
-              <label style="color: #BA68C8; font-weight: bold; margin-top: 12px;">✨ AI 智慧文案提示：</label>
-              <input type="text" id="ai_prompt" placeholder="輸入想法（例如：周末辦建築大賽）">
-            </div>
-            
-            <div style="flex: 2; min-width: 280px;">
-              <label>內文內容：</label>
-              <textarea id="discord_content" placeholder="請輸入要發布到 Discord 的詳細內容..."></textarea>
-              <button class="btn-ai" onclick="generateAndSendAI()">🤖 開始生成按鈕並發布</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="wide-card">
-          <h3>⚖️ 伺服器規則與違規分析檢測器</h3>
-          <label>輸入玩家行為描述或舉報內容：</label>
-          <input type="text" id="rule_input" placeholder="輸入要檢測的行為...">
-          <button class="btn-action" style="background: #2196F3;" onclick="checkRule()">檢測違規條例與建議處罰</button>
-          
-          <div id="rule_result" class="result-box"></div>
+          <p>狀態：<span class="status" id="b2_status">${bot2Status.status}</span></p>
         </div>
       </div>
 
+      <div class="api-box">
+        <p>🔌 公開 API 狀態接口：<a href="/api/status" target="_blank" style="color: #64B5F6;">/api/status</a></p>
+      </div>
+
       <script>
-        function reconnectBot(botId) {
-          fetch('/api/control?bot=' + botId + '&action=reconnect').then(() => location.reload());
-        }
-
-        async function generateAndSendAI() {
-          const prompt = document.getElementById('ai_prompt').value;
-          const type = document.getElementById('discord_type').value;
-          const title = document.getElementById('discord_title').value;
-          
-          if (!prompt) return alert('請先輸入 AI 生成提示與想法！');
-
-          const btn = event.target;
-          btn.innerText = '⏳ AI 正在生成並發布中...';
-          btn.disabled = true;
-
+        // 每 5 秒自動更新網頁狀態
+        setInterval(async () => {
           try {
-            const aiRes = await fetch('/api/ai_generate', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-              body: 'prompt=' + encodeURIComponent(prompt) + '&type=' + encodeURIComponent(type)
-            });
-            const aiData = await aiRes.json();
-
-            if (!aiData.success) {
-              throw new Error(aiData.error);
-            }
-
-            document.getElementById('discord_content').value = aiData.text;
-
-            const discRes = await fetch('/api/discord', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-              body: 'type=' + encodeURIComponent(type) + '&title=' + encodeURIComponent(title) + '&content=' + encodeURIComponent(aiData.text)
-            });
-            const discData = await discRes.json();
-
-            if (discData.success) {
-              alert('🎉 AI 文案生成成功，並已順利發布至 Discord！');
-            } else {
-              alert('文案已生成，但 Discord 發布失敗: ' + discData.error);
-            }
-          } catch (err) {
-            alert('發生錯誤：' + err.message);
-          } finally {
-            btn.innerText = '🤖 開始生成按鈕並發布';
-            btn.disabled = false;
-          }
-        }
-
-        function checkRule() {
-          const actionText = document.getElementById('rule_input').value;
-          if (!actionText) return alert('請輸入要檢測的行為！');
-
-          fetch('/api/check_rule', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: 'actionText=' + encodeURIComponent(actionText)
-          })
-          .then(res => res.json())
-          .then(data => {
-            const resBox = document.getElementById('rule_result');
-            resBox.style.display = 'block';
-            resBox.innerHTML = '<b>📌 觸發核心守則：</b> ' + data.result.rule + '<br>' +
-                               '<b>⚙️ 條例說明：</b> ' + data.result.desc + '<br>' +
-                               '<b>⚡ 建議處罰條款：</b> <span style="color: #ff5252; font-weight: bold;">' + data.result.punishment + '</span>';
-          });
-        }
-
-        setInterval(() => { location.reload(); }, 15000);
+            const res = await fetch('/api/status');
+            const data = await res.json();
+            document.getElementById('b1_status').innerText = data.bots[0].status;
+            document.getElementById('b2_status').innerText = data.bots[1].status;
+          } catch(e) {}
+        }, 5000);
       </script>
     </body>
     </html>
@@ -357,9 +79,10 @@ const server = http.createServer((req, res) => {
 
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
-  console.log(`[HTTP] 管理控制面板已在 Port ${PORT} 啟動`);
+  console.log(`[HTTP] 伺服器已在 Port ${PORT} 啟動`);
 });
 
+// 機器人 1 邏輯
 function createBot1() {
   bot1Status.status = '正在嘗試連線...';
   bot1Client = bedrock.createClient({
@@ -379,12 +102,11 @@ function createBot1() {
     jumpInterval = setInterval(() => {
       try {
         bot1Client.queue('player_auth_input', {
-          pitch: 0,
-          yaw: 0,
+          pitch: 0, yaw: 0,
           position: { x: 0, y: 0, z: 0 },
           move_vector: { x: 0, z: 0 },
           head_yaw: 0,
-          input_data: 0x01,
+          input_data: 0x01, // 跳躍指令
           input_command_source: 0,
           player_action: 0,
           interaction_model: 0,
@@ -403,11 +125,6 @@ function createBot1() {
     }
   });
 
-  bot1Client.on('kick', (reason) => {
-    bot1Status.status = `🔴 被踢出: ${JSON.stringify(reason)}`;
-    if (jumpInterval) clearInterval(jumpInterval);
-  });
-
   bot1Client.on('close', () => {
     bot1Status.status = '🟡 斷線中，2秒後重試...';
     if (jumpInterval) clearInterval(jumpInterval);
@@ -421,6 +138,7 @@ function createBot1() {
   });
 }
 
+// 機器人 2 邏輯
 function createBot2() {
   bot2Status.status = '正在嘗試連線...';
   bot2Client = bedrock.createClient({
@@ -440,8 +158,7 @@ function createBot2() {
     jumpInterval2 = setInterval(() => {
       try {
         bot2Client.queue('player_auth_input', {
-          pitch: 0,
-          yaw: 0,
+          pitch: 0, yaw: 0,
           position: { x: 0, y: 0, z: 0 },
           move_vector: { x: 0, z: 0 },
           head_yaw: 0,
@@ -462,11 +179,6 @@ function createBot2() {
       if (jumpInterval2) clearInterval(jumpInterval2);
       try { bot2Client.close(); } catch(e){}
     }
-  });
-
-  bot2Client.on('kick', (reason) => {
-    bot2Status.status = `🔴 被踢出: ${JSON.stringify(reason)}`;
-    if (jumpInterval2) clearInterval(jumpInterval2);
   });
 
   bot2Client.on('close', () => {
