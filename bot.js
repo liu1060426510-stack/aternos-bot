@@ -228,7 +228,7 @@ const server = http.createServer((req, res) => {
     </head>
     <body>
       <h1>Minecraft 伺服器管理與掛機控制台</h1>
-      <p class="subtitle">機器人穩定掛機、AI 智慧文案生成、Discord 發布與規則檢測</p>
+      <p class="subtitle">機器人穩定掛機（每2秒自動跳躍）、AI 智慧文案生成與發布</p>
       
       <div class="container">
         <div class="card">
@@ -369,21 +369,56 @@ function createBot1() {
     username: 'AternosBot1',
     offline: true
   });
+
+  let jumpInterval = null;
+
   bot1Client.on('connect', () => { bot1Status.status = '已建立底層連線'; });
-  bot1Client.on('spawn', () => { bot1Status.status = '🟢 已進入遊戲世界穩定掛機中'; });
+  bot1Client.on('spawn', () => {
+    bot1Status.status = '🟢 已進入遊戲世界穩定掛機中';
+    
+    // 每 2 秒自動跳躍一次
+    if (jumpInterval) clearInterval(jumpInterval);
+    jumpInterval = setInterval(() => {
+      try {
+        bot1Client.queue('player_auth_input', {
+          pitch: 0,
+          yaw: 0,
+          position: bot1Status.position || { x: 0, y: 0, z: 0 },
+          move_vector: { x: 0, z: 0 },
+          head_yaw: 0,
+          input_data: 0x01, // 模擬跳躍輸入
+          input_command_source: 0,
+          player_action: 0,
+          interaction_model: 0,
+          tick: 0,
+          delta: { x: 0, y: 0, z: 0 }
+        });
+      } catch (e) {}
+    }, 2000);
+  });
+
   bot1Client.on('text', (packet) => {
     if (packet.message && (packet.message.includes('died') || packet.message.includes('死'))) {
       bot1Status.status = '💀 機器人死亡，正在自動重新連線...';
+      if (jumpInterval) clearInterval(jumpInterval);
       try { bot1Client.close(); } catch(e){}
     }
   });
-  bot1Client.on('kick', (reason) => { bot1Status.status = `🔴 被踢出: ${JSON.stringify(reason)}`; });
+
+  bot1Client.on('kick', (reason) => {
+    bot1Status.status = `🔴 被踢出: ${JSON.stringify(reason)}`;
+    if (jumpInterval) clearInterval(jumpInterval);
+  });
+
   bot1Client.on('close', () => {
     bot1Status.status = '🟡 斷線中，2秒後重試...';
+    if (jumpInterval) clearInterval(jumpInterval);
     setTimeout(createBot1, 2000);
   });
+
   bot1Client.on('error', (err) => {
     bot1Status.status = `❌ 錯誤: ${err.message}`;
+    if (jumpInterval) clearInterval(jumpInterval);
     setTimeout(createBot1, 2000);
   });
 }
@@ -396,21 +431,56 @@ function createBot2() {
     username: 'AternosBot2',
     offline: true
   });
+
+  let jumpInterval2 = null;
+
   bot2Client.on('connect', () => { bot2Status.status = '已建立底層連線'; });
-  bot2Client.on('spawn', () => { bot2Status.status = '🟢 已進入遊戲世界穩定掛機中'; });
+  bot2Client.on('spawn', () => {
+    bot2Status.status = '🟢 已進入遊戲世界穩定掛機中';
+    
+    // 每 2 秒自動跳躍一次
+    if (jumpInterval2) clearInterval(jumpInterval2);
+    jumpInterval2 = setInterval(() => {
+      try {
+        bot2Client.queue('player_auth_input', {
+          pitch: 0,
+          yaw: 0,
+          position: { x: 0, y: 0, z: 0 },
+          move_vector: { x: 0, z: 0 },
+          head_yaw: 0,
+          input_data: 0x01,
+          input_command_source: 0,
+          player_action: 0,
+          interaction_model: 0,
+          tick: 0,
+          delta: { x: 0, y: 0, z: 0 }
+        });
+      } catch (e) {}
+    }, 2000);
+  });
+
   bot2Client.on('text', (packet) => {
     if (packet.message && (packet.message.includes('died') || packet.message.includes('死'))) {
       bot2Status.status = '💀 機器人死亡，正在自動重新連線...';
+      if (jumpInterval2) clearInterval(jumpInterval2);
       try { bot2Client.close(); } catch(e){}
     }
   });
-  bot2Client.on('kick', (reason) => { bot2Status.status = `🔴 被踢出: ${JSON.stringify(reason)}`; });
+
+  bot2Client.on('kick', (reason) => {
+    bot2Status.status = `🔴 被踢出: ${JSON.stringify(reason)}`;
+    if (jumpInterval2) clearInterval(jumpInterval2);
+  });
+
   bot2Client.on('close', () => {
     bot2Status.status = '🟡 斷線中，2秒後重試...';
+    if (jumpInterval2) clearInterval(jumpInterval2);
     setTimeout(createBot2, 2000);
   });
+
   bot2Client.on('error', (err) => {
     bot2Status.status = `❌ 錯誤: ${err.message}`;
+    if (jumpInterval2) clearInterval(jumpInterval2);
     setTimeout(createBot2, 2000);
   });
 }
